@@ -1,0 +1,7 @@
+# Trivy FS 스캔 (PR diff-aware, vuln+secret). 보안 가드레일이 자동 배포한 표준 워크플로.
+# 세부/문의: liner-engineering/security (보안팀)
+name: Trivy Scan
+on: pull_request
+jobs:
+  trivy:
+    uses: liner-engineering/security/.github/workflows/trivy-scan.yml@v1
