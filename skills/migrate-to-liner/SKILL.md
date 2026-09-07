@@ -77,6 +77,20 @@ decide.
 `tool_choice`, `parallel_tool_calls`, `temperature`, `top_p`,
 `presence_penalty`, `frequency_penalty`.
 
+### Breakage that is not a request parameter
+
+Two things reliably break a migration and neither of them appears when you read
+request payloads, so look for both explicitly:
+
+- **Tokenizer lookups keyed on the model name.** `tiktoken.encoding_for_model("liner-mark-1.0")`
+  raises `KeyError`, usually at import time, which kills the process before it
+  serves anything. Decouple the encoding from the API model name rather than
+  deleting the token accounting that depends on it.
+- **Model names hardcoded away from the config constant.** A project that
+  defines a `MODEL` constant often still has a literal `model="gpt-4o"` at a
+  second call site, most often the follow-up request after a tool result. Grep
+  for the literal string, not only for the constant.
+
 Streaming (SSE), function calling including parallel and streamed tool call
 deltas, and prompt caching all work as documented. The server is stateless, so
 conversation history must be resent on every request, same as OpenAI.
