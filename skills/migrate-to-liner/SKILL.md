@@ -1,6 +1,6 @@
 ---
 name: migrate-to-liner
-description: Migrate an existing OpenAI-compatible LLM integration to the Liner Model API (liner-mark-1.0), showing a cost comparison before touching any code and auditing every call site for parameters that Liner silently ignores. Use this whenever someone wants to switch, port, try, or evaluate Liner as their LLM provider, mentions liner-mark or platform.liner.com, asks what Liner would cost compared to their current OpenAI/Anthropic/Gemini bill, or asks whether Liner is a drop-in replacement for code they already have. Also use it when a repository already calls an OpenAI-compatible chat completions endpoint and the user asks about benchmarking or pricing another provider, even if they never say the word "migrate".
+description: Migrate an existing OpenAI-compatible LLM integration to the Liner Model API (liner-mark-1.0), showing a cost comparison before touching any code and auditing every call site for parameters Liner does not support. Use this whenever someone wants to switch, port, try, or evaluate Liner as their LLM provider, mentions liner-mark or platform.liner.com, asks what Liner would cost compared to their current OpenAI/Anthropic/Gemini bill, or asks whether Liner is a drop-in replacement for code they already have. Also use it when a repository already calls an OpenAI-compatible chat completions endpoint and the user asks about benchmarking or pricing another provider, even if they never say the word "migrate".
 license: MIT
 ---
 
