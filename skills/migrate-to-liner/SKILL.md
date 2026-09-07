@@ -63,7 +63,7 @@ Verified against production on 2026-09-07.
 | `n` greater than 1 | Rejected | **Blocker.** Only one completion per request. Either drop the dependency on multiple choices, or leave this call site on its current provider. |
 | `response_format` (JSON mode / structured output) | Rejected | **Blocker.** If the project needs structured output, function calling with `tools` is supported and is the path to suggest. |
 | `messages[].content` as an array (image or audio parts) | Rejected | **Blocker.** Only string content is supported. |
-| `max_tokens` | Returns `200` and the value is honored | Safe. Prefer rewriting to `max_completion_tokens`, which is the documented field. |
+| `max_tokens` | Returns `200` and the value is honored | Safe. Prefer rewriting to `max_completion_tokens`, which is the documented field, unless the call path is shared with other providers that accept only `max_tokens`. |
 | Any field not in the supported list below | Undefined | Treat as a blocker. Test it against a real key before trusting it. |
 
 For each blocker, show the user the file and line, what breaks, and what the fix
@@ -86,6 +86,12 @@ request payloads, so look for both explicitly:
   raises `KeyError`, usually at import time, which kills the process before it
   serves anything. Decouple the encoding from the API model name rather than
   deleting the token accounting that depends on it.
+- **Call sites whose output is compared over time.** Benchmark judges, eval
+  scorers, golden-file tests and anything whose numbers are tracked across runs
+  fail quietly when the model changes. They keep producing results, and the
+  results are simply no longer comparable to the ones already stored. That is a
+  measurement decision rather than a code decision, so surface it and let the
+  user make the call.
 - **Model names hardcoded away from the config constant.** A project that
   defines a `MODEL` constant often still has a literal `model="gpt-4o"` at a
   second call site, most often the follow-up request after a tool result. Grep
@@ -114,6 +120,11 @@ moving from a model that does not reason, measuring against the default
 overstates what the migration costs. Set `reasoning_effort` to `none` for a
 like-for-like comparison, then measure again at a higher setting only if the
 project actually wants reasoning.
+
+Reasoning tokens also land in `usage.total_tokens`. An application that enforces
+its own ceiling from that field will start refusing requests it used to accept,
+and the user sees a token-limit error rather than anything pointing at the
+migration.
 
 Look up the current provider's published price for the exact model in the code.
 Do not rely on remembered prices, since they change. Then compute both sides
@@ -150,13 +161,15 @@ code in the same turn as presenting the estimate.
 
 ## Step 4 — Apply the change
 
-Three values change. Nothing else should.
+Three values change, plus `reasoning_effort` when step 3 showed the project is
+coming from a model that does not reason. Nothing else should.
 
 | Setting | Value |
 | --- | --- |
 | Base URL | `https://platform.liner.com/api/v1` |
 | API key | The user's Liner key, read from `LINER_API_KEY` |
 | Model | `liner-mark-1.0` |
+| `reasoning_effort` | `none`, only when the source model did not reason |
 
 Authentication is `Authorization: Bearer <key>`, which is what the OpenAI SDKs
 already send. The user gets a key at platform.liner.com; if they do not have one
