@@ -1,4 +1,3 @@
-# artifacts of running `npx skills add` inside this repo
 .agents/
 .claude/skills/
 skills-lock.json
