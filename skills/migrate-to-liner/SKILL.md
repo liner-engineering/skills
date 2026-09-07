@@ -101,6 +101,12 @@ Streaming (SSE), function calling including parallel and streamed tool call
 deltas, and prompt caching all work as documented. The server is stateless, so
 conversation history must be resent on every request, same as OpenAI.
 
+These message shapes were checked against production on 2026-09-07 and are all
+accepted: an `assistant` turn arriving before any `user` turn, an `assistant`
+message with `content` omitted or set to `null` alongside `tool_calls`, and a
+`tool` message carrying a `name` key. Those are what the OpenAI SDKs emit during
+a tool round trip, so a tool-using project needs no reshaping here.
+
 ## Step 3 — Cost comparison, then ask
 
 Do this before editing anything. The user should approve the change with a
