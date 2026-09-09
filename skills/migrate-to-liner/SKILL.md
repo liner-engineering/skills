@@ -12,6 +12,19 @@ matters is everything around those three values, because "OpenAI-compatible" is
 never 100% compatible, and the gaps that hurt are the ones that return `200 OK`
 and quietly do the wrong thing.
 
+## What this skill covers
+
+This skill migrates OpenAI-compatible clients. A project calling the Anthropic
+or Gemini SDK directly is out of scope: the request shape, the response shape,
+the streaming events and the tool schemas all differ, and rewriting them is not
+a base-URL change. Say that plainly and stop, rather than producing a rewrite
+that looks finished and is not.
+
+The exception is a project that already goes through LangChain, LlamaIndex, the
+Vercel AI SDK, LiteLLM or Instructor. Those reach Liner through a provider
+setting whichever model they run today, so they are in scope even when the model
+named in the config is a Claude or Gemini one.
+
 Run this in the order below. Do not skip step 2, and do not edit code before the
 user has seen step 3.
 
@@ -62,8 +75,15 @@ Verified against production on 2026-09-07.
 | `seed` | Not supported | **Blocker.** Remove it rather than relying on an error to surface it, and tell the user that identical requests are not guaranteed to return identical output. Tests and golden-file comparisons pinned to a seed have to change before this call site moves. |
 | `n` greater than 1 | Rejected | **Blocker.** Only one completion per request. Either drop the dependency on multiple choices, or leave this call site on its current provider. |
 | `response_format` (JSON mode / structured output) | Rejected | **Blocker.** If the project needs structured output, function calling with `tools` is supported and is the path to suggest. |
-| `messages[].content` as an array (image or audio parts) | Rejected | **Blocker.** Only string content is supported. |
+| `messages[].content` carrying an image or audio part | Rejected | **Blocker.** Text-only part arrays are accepted, so dropping the image part is often the whole fix. A project built around images has nowhere to go. |
 | `max_tokens` | Returns `200` and the value is honored | Safe. Prefer rewriting to `max_completion_tokens`, which is the documented field, unless the call path is shared with other providers that accept only `max_tokens`. |
+| `stop` | Rejected | **Blocker.** Stop sequences are common, so look for them early. The usual fix is moving the truncation into the caller; otherwise leave the call site where it is. |
+| `logprobs`, `top_logprobs` | Rejected | **Blocker.** Classifiers and eval harnesses that read token probabilities cannot move. |
+| `logit_bias` | Rejected | **Blocker.** |
+| `store: true` | Rejected, saying completions are not persisted | **Blocker.** Nothing is retained server-side, so a project reading its history back needs its own logging first. |
+| `prediction` | Rejected | **Blocker.** |
+| `web_search_options` | Rejected | **Blocker.** |
+| `functions`, `function_call` (the pre-2024 form) | Rejected | **Blocker,** but usually an easy one: rewrite to `tools` and `tool_choice`, which are supported. |
 | Any field not in the supported list below | Undefined | Treat as a blocker. Test it against a real key before trusting it. |
 
 For each blocker, show the user the file and line, what breaks, and what the fix
@@ -71,11 +91,12 @@ would be. Then leave the call site alone. Partial migration is a good result:
 move the call sites that are clean, list the ones that are not, and let the user
 decide.
 
-**Supported request fields:** `model`, `messages` (string content only),
-`stream`, `stream_options.include_usage`, `max_completion_tokens`,
-`reasoning_effort` (`none`, `low`, `medium` default, `high`, `max`), `tools`,
-`tool_choice`, `parallel_tool_calls`, `temperature`, `top_p`,
-`presence_penalty`, `frequency_penalty`.
+**Supported request fields:** `model`, `messages` (string content, or a parts
+array where every part is text), `stream`, `stream_options.include_usage`,
+`max_completion_tokens`, `reasoning_effort` (`none`, `low`, `medium` default,
+`high`, `max`), `tools`, `tool_choice`, `parallel_tool_calls`, `temperature`,
+`top_p`, `presence_penalty`, `frequency_penalty`, `user`, `metadata`,
+`service_tier`.
 
 ### Breakage that is not a request parameter
 
