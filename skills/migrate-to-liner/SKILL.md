@@ -9,8 +9,9 @@ license: MIT
 Liner Model API speaks the OpenAI Chat Completions format. For most projects the
 migration is three values: base URL, API key, model name. The work that actually
 matters is everything around those three values, because "OpenAI-compatible" is
-never 100% compatible, and the gaps that hurt are the ones that return `200 OK`
-and quietly do the wrong thing.
+never 100% compatible. Liner names dropped fields in the
+`x-liner-ignored-parameters` response header, so the gaps are visible if you
+look, and the ones that hurt are the ones nobody looks at.
 
 ## What this skill covers
 
@@ -72,9 +73,9 @@ Verified against production on 2026-09-07.
 
 | In the current code | What Liner does | Your action |
 | --- | --- | --- |
-| `seed` | Not supported | **Blocker.** Remove it rather than relying on an error to surface it, and tell the user that identical requests are not guaranteed to return identical output. Tests and golden-file comparisons pinned to a seed have to change before this call site moves. |
+| `seed` | Accepted, not applied, and named in the `x-liner-ignored-parameters` response header | **Blocker for reproducibility.** The call succeeds, so nothing in the body tells you the seed was dropped. The header does. Tests and golden-file comparisons pinned to a seed have to change before this call site moves. |
 | `n` greater than 1 | Rejected | **Blocker.** Only one completion per request. Either drop the dependency on multiple choices, or leave this call site on its current provider. |
-| `response_format` (JSON mode / structured output) | Rejected | **Blocker.** If the project needs structured output, function calling with `tools` is supported and is the path to suggest. |
+| `response_format` (`json_object` and `json_schema`) | Supported, and rejected with a `400` only when the messages never mention JSON | Safe. OpenAI applies the same rule, so a project moving across already satisfies it. If it does not, add the word to the prompt rather than dropping the field. |
 | `messages[].content` carrying an image or audio part | Rejected | **Blocker.** Text-only part arrays are accepted, so dropping the image part is often the whole fix. A project built around images has nowhere to go. |
 | `max_tokens` | Returns `200` and the value is honored | Safe. Prefer rewriting to `max_completion_tokens`, which is the documented field, unless the call path is shared with other providers that accept only `max_tokens`. |
 | `stop` | Rejected | **Blocker.** Stop sequences are common, so look for them early. The usual fix is moving the truncation into the caller; otherwise leave the call site where it is. |
@@ -95,8 +96,12 @@ decide.
 array where every part is text), `stream`, `stream_options.include_usage`,
 `max_completion_tokens`, `reasoning_effort` (`none`, `low`, `medium` default,
 `high`, `max`), `tools`, `tool_choice`, `parallel_tool_calls`, `temperature`,
-`top_p`, `presence_penalty`, `frequency_penalty`, `user`, `metadata`,
-`service_tier`.
+`top_p`, `presence_penalty`, `frequency_penalty`.
+
+`user`, `metadata` and `service_tier` are accepted and then dropped, each named
+in `x-liner-ignored-parameters`. Leave them in place: nothing breaks, they
+simply have no effect. Say so if the project reads `user` back for abuse
+tracking or per-seat attribution.
 
 ### Breakage that is not a request parameter
 
@@ -231,6 +236,9 @@ An untested migration is not finished. Run something real from the project, not
 a hello-world:
 
 - One non-streaming call, and confirm `usage` comes back populated
+- Read `x-liner-ignored-parameters` on that response. Anything named there was
+  dropped, and it is the fastest check that the migrated request carries only
+  fields that actually take effect
 - One streaming call if the project streams, and confirm the `[DONE]` terminator
 - One function call round trip if the project uses tools, and confirm
   `tool_calls` arrives with parseable `arguments`
