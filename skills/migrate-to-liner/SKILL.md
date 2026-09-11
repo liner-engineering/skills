@@ -185,9 +185,13 @@ project actually wants reasoning.
 
 Call sites that send images are the exception. `none` is rejected there, so
 measure them at `low` and count their reasoning tokens as output. The image
-itself is billed as input tokens at the standard rate, and even a small image
-measured at about 1,100 of them, so an image-heavy workload needs its image
-count in the estimate.
+itself is billed as input tokens at the standard rate: about 1,100 per image,
+whatever its size, in every measurement so far.
+
+Do not assume the reasoning is small. Receipt extraction at `low` measured 750
+to 2,200 reasoning tokens per call, billed as output, which costs more than the
+image does. An image-heavy workload moving off a cheap vision model can come out
+several times more expensive, and the estimate has to say so.
 
 Reasoning tokens also land in `usage.total_tokens`. An application that enforces
 its own ceiling from that field will start refusing requests it used to accept,
