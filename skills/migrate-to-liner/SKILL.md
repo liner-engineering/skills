@@ -71,6 +71,9 @@ Search the repository for the current LLM integration. Look for:
 - Raw HTTP: `chat/completions`, `/v1/responses`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.anthropic.com`
 - Config: `OPENAI_API_KEY`, `base_url`, `baseURL`, `OPENAI_BASE_URL`, model names in env files, YAML, or constants
 - Frameworks that wrap the client: LangChain, LlamaIndex, Vercel AI SDK, LiteLLM, Instructor
+- Built-in search and research: `"type": "web_search"`, `web_search_preview`, `file_search`,
+  and deep-research models such as `o4-mini-deep-research`. Flag these early; they
+  usually belong on a different Liner API (see *Call sites that search the web*)
 
 Build a list of call sites. For each one record the model name, every request
 parameter passed, and how the response is read. **How the response is read
@@ -92,7 +95,7 @@ parameters uniformly. Some are rejected, some work, and some return `200 OK` and
 are ignored. The third group is dangerous because nothing in the response says
 anything went wrong.
 
-Verified against production on 2026-09-11.
+Verified against production on 2026-09-14.
 
 | In the current code | What Liner does | Your action |
 | --- | --- | --- |
@@ -147,9 +150,49 @@ stateless.
 | `instructions`, `max_output_tokens`, `reasoning.effort`, `text.format`, function `tools`, `input_image` parts | Supported | Safe. |
 | `previous_response_id` | Rejected | **Blocker.** Resend the full conversation in `input` on every turn instead. |
 | `store: true` | Rejected | **Blocker.** Drop it. Nothing is kept server-side, so history the project reads back has to live in its own storage. |
-| Built-in tools: `web_search`, `file_search`, `code_interpreter` | Rejected; only `function` tools are accepted | **Blocker.** Leave the call site on its current provider, or replace the built-in tool with a function tool the project implements. |
-| `reasoning.summary`, `include`, `text.verbosity`, `client_metadata` | Rejected | Drop them. Liner returns neither reasoning summaries nor encrypted reasoning, so nothing downstream reads them. |
+| Built-in tools (`web_search`, `file_search`, `code_interpreter`) and `namespace` tool groups | Accepted, then dropped; `x-liner-ignored-parameters` names them as `tools[N].type` | **Blocker.** The call succeeds, but the model has nothing to search with and answers from memory, with no error. Do not move the call site to the Model API as it is. See *Call sites that search the web* below. |
+| `reasoning.summary`, `include`, `client_metadata` | Accepted, then dropped and named in `x-liner-ignored-parameters` | Safe to leave in place. Liner returns neither reasoning summaries nor encrypted reasoning, so nothing downstream reads them. |
+| `text.verbosity` | Rejected | Drop it. |
 | `input` items of type `reasoning`, replayed from an earlier OpenAI response | Rejected; only `message`, `function_call` and `function_call_output` items are accepted | Strip them from stored history before replaying it. Liner does not return reasoning items, so this only affects history saved before the migration. |
+
+### Call sites that search the web
+
+A call site that leans on OpenAI's built-in `web_search`, a deep-research model,
+or search-grounded answers usually belongs on one of Liner's search APIs rather
+than on the Model API. Liner has a direct counterpart for each, and on search it
+is usually the cheaper side, so never report these as having no equivalent on
+Liner.
+
+| What the call site does | Liner API | Price | Endpoint |
+| --- | --- | --- | --- |
+| Fetches web results to feed its own model or pipeline | Web Search | $1 per 1,000 requests | `POST /api/v1/tools/search/web` |
+| The same, limited to academic papers | Scholar Search | $0.30 per 1,000 requests | `POST /api/v1/tools/search/scholar` |
+| Short streamed answer with a few sources | Quick Answer Agent | $3 per 1,000 requests | `POST /api/v1/agents/quick-answer` |
+| Answer with citations from iterative search | Search Agent | $20 per 1,000 requests | `POST /api/v1/agents/search` |
+| Long-form research report | Deep Research Agent | $200 per 1,000 requests | `POST /api/v1/agents/deep-research` |
+
+Every endpoint is on `https://platform.liner.com` and takes the same Liner API
+key, sent as `x-api-key` rather than as a Bearer token. Liner also offers
+Visualization and Visual Answer Agent APIs; their prices are on the pricing page.
+
+These APIs are not OpenAI-compatible. Each has its own request and response
+shape, so moving a call site to one of them rewrites that call; it is not a
+three-value change. Read the endpoint's page before writing any code, for
+example `https://liner.com/developers/docs/search-api.md`. Every docs page is
+available as markdown at its usual path with `.md` appended.
+
+Two shapes cover most projects:
+
+- **Keep the model, replace the search.** Point the model at the Model API and
+  give it a function tool whose handler calls Web Search. Both the model call
+  and the search then run on Liner.
+- **Replace the whole call.** When the call site exists only to produce a
+  grounded answer, one Search Agent or Quick Answer Agent request replaces the
+  model call and its search tool together.
+
+Offer this as its own choice after the Model API change, with its own cost line
+and its own approval. The approval for the three-value change does not cover a
+rewrite.
 
 ### Breakage that is not a request parameter
 
@@ -223,14 +266,23 @@ from the same token counts.
 **Liner Model API pricing, per 1M tokens:** input $1.00, output $6.00, cached
 input $0.10.
 
+Liner's search and agent APIs are priced per request instead. A call site headed
+for one of them gets its own line in the estimate; do not fold it into the
+Model API total, and compare it with the matching line on the current bill.
+OpenAI charges for `web_search` per call on top of the model's tokens.
+
 Prompt caching is live and billed at the cached rate, so a project with a large
 fixed system prompt will see a bigger difference than the headline rates
 suggest. Include the cached portion in the estimate when the project reuses a
 long prefix.
 
-Present it like this, then stop and wait:
+Open with how much of the project moves, so a partial migration is visible
+before anyone approves it. Present it like this, then stop and wait:
 
 ```
+Call sites: <moving> of <total> move to the Model API. The rest are listed
+            below with the reason, and the Liner API that fits them if any.
+
 Workload: ~42M input / ~8M output per month, measured over 200 real calls
 Liner run with reasoning_effort=none, matching the current model
 
@@ -332,7 +384,7 @@ immediately.
 
 ## If something contradicts this file
 
-This skill was written against the API as measured on 2026-09-11. If a real call
+This skill was written against the API as measured on 2026-09-14. If a real call
 behaves differently from what is written here, trust the real call, tell the
 user what differed, and keep going. Do not bend the user's code to match a
 document.
