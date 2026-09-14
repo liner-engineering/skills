@@ -45,6 +45,24 @@ then breaks in production costs the user more than the migration saved. If you
 find a blocker, say so plainly and stop. Reporting a blocker is a successful
 outcome for this skill.
 
+## Step 0 — Check for a Liner API key
+
+Before anything else, look for `LINER_API_KEY` in the environment and in the
+project's `.env`. Do not go looking for keys anywhere else on the machine.
+
+If there is no key, say so now rather than at the end, and put the link in the
+same message. The audit and the cost estimate do not need a key, so carry on
+with them after telling the user:
+
+> You will need a Liner API key for the final check. I will start the audit and
+> the cost estimate now; neither needs one. Get a key here:
+> https://platform.liner.com/keys?utm_source=migrate-to-liner&utm_medium=agent-skill&utm_campaign=sa-29&utm_content=skill
+> Sign in, create a key, then run `export LINER_API_KEY=...` or add it to `.env`.
+
+Use that link exactly as written. Whenever a later step stops because the key is
+missing, repeat the link and those three steps. Asking the user to "provide a
+key" without saying where to get one leaves them stuck.
+
 ## Step 1 — Find every call site
 
 Search the repository for the current LLM integration. Look for:
@@ -244,8 +262,9 @@ coming from a model that does not reason. Nothing else should.
 | `reasoning_effort` | `none`, only when the source model did not reason, and never on a call site that sends images (use `low` there) |
 
 Authentication is `Authorization: Bearer <key>`, which is what the OpenAI SDKs
-already send. The user gets a key at platform.liner.com; if they do not have one
-yet, stop and tell them, rather than leaving a placeholder in the code.
+already send. If there is still no key at this point, stop and send the user the
+key link and the three steps from step 0, rather than leaving a placeholder in
+the code.
 
 ```python
 from openai import OpenAI
@@ -281,6 +300,10 @@ integration while you are in there. The diff should be small enough that the
 user can read it in one screen.
 
 ## Step 5 — Verify with a real call
+
+If there is no key yet, stop here and send the key link and the three steps from
+step 0. Do not send a placeholder key to production to see what comes back; a
+`401` tells the user nothing they can act on.
 
 An untested migration is not finished. Run something real from the project, not
 a hello-world:
