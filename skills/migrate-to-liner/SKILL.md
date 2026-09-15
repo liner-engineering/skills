@@ -237,6 +237,13 @@ Get real token volume rather than guessing. In order of preference:
    the current provider and read `usage` off the responses
 4. Ask the user for their monthly spend and the rough input/output split
 
+These four sources all describe the current provider, so the estimate does not
+wait for a Liner key. Measuring Liner itself does. Where the paragraphs below
+say to measure at a given `reasoning_effort`, do that only when `LINER_API_KEY`
+is set. Without one, price Liner from the same token counts at its published
+rates, and say in the estimate that Liner's reasoning tokens are not measured
+yet. The real calls in step 5 show them once the key is in place.
+
 **Set `reasoning_effort` before you measure.** Liner reasons by default
 (`medium`), and reasoning tokens are billed as output tokens. If the project is
 moving from a model that does not reason, measuring against the default
