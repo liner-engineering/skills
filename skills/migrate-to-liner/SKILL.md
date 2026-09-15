@@ -95,11 +95,9 @@ parameters uniformly. Some are rejected, some work, and some return `200 OK` and
 are ignored. The third group is dangerous because nothing in the response says
 anything went wrong.
 
-Verified against production on 2026-09-14.
-
 | In the current code | What Liner does | Your action |
 | --- | --- | --- |
-| `seed` | Accepted, not applied, and named in the `x-liner-ignored-parameters` response header | **Blocker for reproducibility.** The call succeeds, so nothing in the body tells you the seed was dropped. The header does. Tests and golden-file comparisons pinned to a seed have to change before this call site moves. |
+| `seed` | Accepted, not applied, and named in the `x-liner-ignored-parameters` response header | **Blocker for reproducibility.** Tests and golden-file comparisons pinned to a seed have to change before this call site moves. |
 | `n` greater than 1 | Rejected | **Blocker.** Only one completion per request. Either drop the dependency on multiple choices, or leave this call site on its current provider. |
 | `response_format` (`json_object` and `json_schema`) | Supported, and rejected with a `400` only when the messages never mention JSON | Safe. OpenAI applies the same rule, so a project moving across already satisfies it. If it does not, add the word to the prompt rather than dropping the field. |
 | Image parts as base64 data URLs (`data:image/png;base64,...`) | Supported: PNG, JPEG, WEBP, HEIC, HEIF, up to 10 images and 20 MB of decoded image data per request | Safe, subject to the three conditions below the table. |
@@ -196,8 +194,8 @@ rewrite.
 
 ### Breakage that is not a request parameter
 
-Two things reliably break a migration and neither of them appears when you read
-request payloads, so look for both explicitly:
+Three things reliably break a migration and none of them appears when you read
+request payloads, so look for each explicitly:
 
 - **Tokenizer lookups keyed on the model name.** `tiktoken.encoding_for_model("liner-mark-1.0")`
   raises `KeyError`, usually at import time, which kills the process before it
@@ -213,10 +211,6 @@ request payloads, so look for both explicitly:
   defines a `MODEL` constant often still has a literal `model="gpt-4o"` at a
   second call site, most often the follow-up request after a tool result. Grep
   for the literal string, not only for the constant.
-
-Streaming (SSE), function calling including parallel and streamed tool call
-deltas, and prompt caching all work as documented. The server is stateless, so
-conversation history must be resent on every request, same as OpenAI.
 
 These message shapes were checked against production on 2026-09-07 and are all
 accepted: an `assistant` turn arriving before any `user` turn, an `assistant`
@@ -300,10 +294,7 @@ Liner run with reasoning_effort=none, matching the current model
   Difference: <+ or - $X per month>
 ```
 
-If Liner comes out more expensive, give that number and say it plainly in the
-same breath. The user sees it on their next invoice either way, and a skill that
-buried the answer does not get used twice. Where Liner comes out cheaper, say
-that with the same plainness.
+If Liner comes out more expensive, lead with that number.
 
 Ask explicitly before proceeding: **"Want me to apply the change?"** Never edit
 code in the same turn as presenting the estimate.
@@ -321,9 +312,7 @@ coming from a model that does not reason. Nothing else should.
 | `reasoning_effort` | `none`, only when the source model did not reason, and never on a call site that sends images (use `low` there) |
 
 Authentication is `Authorization: Bearer <key>`, which is what the OpenAI SDKs
-already send. If there is still no key at this point, stop and send the user the
-key link and the three steps from step 0, rather than leaving a placeholder in
-the code.
+already send.
 
 ```python
 from openai import OpenAI
@@ -340,14 +329,7 @@ response = client.chat.completions.create(
 ```
 
 A Responses API call site takes the same three values and keeps
-`client.responses.create` as it is:
-
-```python
-response = client.responses.create(
-    model="liner-mark-1.0",
-    input="Hello",
-)
-```
+`client.responses.create` as it is.
 
 Keep the old configuration reachable. An environment variable switch or a
 one-line constant is enough. The user needs to be able to go back in seconds if
@@ -360,17 +342,15 @@ user can read it in one screen.
 
 ## Step 5 — Verify with a real call
 
-If there is no key yet, stop here and send the key link and the three steps from
-step 0. Do not send a placeholder key to production to see what comes back; a
-`401` tells the user nothing they can act on.
+If there is no key yet, stop here. Do not send a placeholder key to see what
+comes back; a `401` tells the user nothing they can act on.
 
 An untested migration is not finished. Run something real from the project, not
 a hello-world:
 
 - One non-streaming call, and confirm `usage` comes back populated
-- Read `x-liner-ignored-parameters` on that response. Anything named there was
-  dropped, and it is the fastest check that the migrated request carries only
-  fields that actually take effect
+- Read `x-liner-ignored-parameters` on that response; anything named there was
+  dropped
 - One streaming call if the project streams, and confirm it ends with `[DONE]` on
   Chat Completions or `response.completed` on the Responses API
 - One call carrying an image if the project sends images, and confirm the answer
