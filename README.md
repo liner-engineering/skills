@@ -30,7 +30,7 @@ You can also use it without installing anything. Point your agent at
 [the skill file](skills/migrate-to-liner/SKILL.md) and ask it to follow the
 instructions there.
 
-You will need a Liner API key from [platform.liner.com](https://platform.liner.com).
+You will need a Liner API key from [platform.liner.com](https://platform.liner.com/keys?utm_source=migrate-to-liner&utm_medium=agent-skill&utm_campaign=sa-29&utm_content=readme).
 
 ## Contributing
 
